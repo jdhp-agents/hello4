@@ -131,7 +131,7 @@
             const monthly = MONTHS.map((month, i) => {
                 const trend = 800 + i * 40;
                 const noise = (r() - 0.5) * 300;
-                return { month, value: Math.round(trend + noise) };
+                return { date: new Date(year, i, 1), month, value: Math.round(trend + noise) };
             });
 
             // Category sales
@@ -224,22 +224,23 @@
             el.append(Plot.plot({
                 height: 220,
                 marginLeft: 45,
-                x: { label: null, tickRotate: -30 },
+                x: { label: null, type: "time", tickFormat: "%b" },
                 y: { label: "Revenue ($k)", tickFormat: v => "$" + v / 1000 + "k", grid: true },
                 marks: [
                     Plot.areaY(data.monthly, {
-                        x: "month", y: "value",
+                        x: "date", y: "value",
                         fill: "#0d6efd", fillOpacity: 0.12,
                         curve: "catmull-rom"
                     }),
                     Plot.lineY(data.monthly, {
-                        x: "month", y: "value",
+                        x: "date", y: "value",
                         stroke: "#0d6efd", strokeWidth: 2.5,
                         curve: "catmull-rom"
                     }),
                     Plot.dot(data.monthly, {
-                        x: "month", y: "value",
+                        x: "date", y: "value",
                         fill: "#0d6efd", r: 4,
+                        title: d => `${d.month}: $${d.value.toLocaleString()}`,
                         tip: true
                     })
                 ]
