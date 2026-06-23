@@ -9,20 +9,326 @@
 
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">  <!-- See https://icons.getbootstrap.com/#install -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
 
-    <!-- Custom CSS -->
-    <link href="css/styles.css" rel="stylesheet">
+    <style>
+        .kpi-card {
+            border-left: 4px solid;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .kpi-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0,0,0,.1);
+        }
+        .kpi-card.primary  { border-color: #0d6efd; }
+        .kpi-card.success  { border-color: #198754; }
+        .kpi-card.warning  { border-color: #ffc107; }
+        .kpi-card.danger   { border-color: #dc3545; }
+        .kpi-value  { font-size: 2rem; font-weight: 700; line-height: 1.1; }
+        .kpi-delta  { font-size: .82rem; }
+        .chart-card { background: #fff; border-radius: 8px; box-shadow: 0 1px 6px rgba(0,0,0,.07); padding: 1.25rem; }
+        .chart-card h6 { font-weight: 600; color: #444; margin-bottom: 1rem; }
+        .chart-card svg { width: 100% !important; height: auto; display: block; }
+        #filterYear { min-width: 110px; }
+        .demo-badge {
+            display: inline-block;
+            font-size: .7rem;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            background: #e9ecef;
+            color: #6c757d;
+            border-radius: 4px;
+            padding: 2px 7px;
+            vertical-align: middle;
+            margin-left: .5rem;
+        }
+    </style>
 </head>
-<body>
-    <main class="container">
-        Main page content goes here.
+<body class="bg-light">
+    <main>
+        <div class="container py-4">
+
+            <!-- Header -->
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
+                <div>
+                    <h4 class="mb-0 fw-bold">Analytics Overview <span class="demo-badge">Demo</span></h4>
+                    <p class="text-muted mb-0" style="font-size:.875rem">Synthetic data · Hello4 application template</p>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <label class="text-muted small mb-0" for="filterYear">Year</label>
+                    <select id="filterYear" class="form-select form-select-sm">
+                        <option value="2024" selected>2024</option>
+                        <option value="2023">2023</option>
+                        <option value="2022">2022</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- KPI row -->
+            <div class="row g-3 mb-4" id="kpiRow"></div>
+
+            <!-- Charts row 1 -->
+            <div class="row g-3 mb-3">
+                <div class="col-12 col-lg-8">
+                    <div class="chart-card h-100">
+                        <h6><i class="bi bi-graph-up me-2 text-primary"></i>Monthly Revenue</h6>
+                        <div id="chartRevenue"></div>
+                    </div>
+                </div>
+                <div class="col-12 col-lg-4">
+                    <div class="chart-card h-100">
+                        <h6><i class="bi bi-pie-chart me-2 text-success"></i>Revenue by Region</h6>
+                        <div id="chartRegion"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts row 2 -->
+            <div class="row g-3 mb-3">
+                <div class="col-12 col-lg-6">
+                    <div class="chart-card h-100">
+                        <h6><i class="bi bi-bar-chart me-2 text-warning"></i>Sales by Category</h6>
+                        <div id="chartCategory"></div>
+                    </div>
+                </div>
+                <div class="col-12 col-lg-6">
+                    <div class="chart-card h-100">
+                        <h6><i class="bi bi-scatter-chart me-2 text-danger"></i>Conversion Rate vs. Sessions</h6>
+                        <div id="chartScatter"></div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
     </main>
 
-    <!-- Bootstrap JS and dependencies -->
+    <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
 
     <!-- Components -->
     <script src="js/navbar.js"></script>
+
+    <!-- Dashboard -->
+    <script type="module">
+        import * as Plot from "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6/+esm";
+
+        // ── Data generation ────────────────────────────────────────────────────
+        const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        const CATEGORIES = ["Software","Services","Hardware","Training","Support"];
+        const REGIONS = ["Europe","North America","Asia-Pacific","Latin America"];
+
+        const SEEDS = { 2022: 1, 2023: 2, 2024: 3 };
+
+        function seededRand(seed) {
+            let s = seed;
+            return () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff; };
+        }
+
+        function generateData(year) {
+            const r = seededRand(SEEDS[year] ?? 3);
+
+            // Monthly revenue (trending upward with noise)
+            const monthly = MONTHS.map((month, i) => {
+                const trend = 800 + i * 40;
+                const noise = (r() - 0.5) * 300;
+                return { month, value: Math.round(trend + noise) };
+            });
+
+            // Category sales
+            const base = [420, 310, 185, 130, 95];
+            const category = CATEGORIES.map((cat, i) => ({
+                category: cat,
+                value: Math.round(base[i] * (0.8 + r() * 0.4))
+            }));
+
+            // Region shares
+            const rawShares = REGIONS.map(() => r());
+            const total = rawShares.reduce((a, b) => a + b, 0);
+            const region = REGIONS.map((name, i) => ({
+                region: name,
+                share: Math.round((rawShares[i] / total) * 100)
+            }));
+
+            // Scatter: 30 channel data points
+            const scatter = Array.from({ length: 30 }, (_, i) => {
+                const sessions = Math.round(200 + r() * 1800);
+                const conv = Math.max(0.5, Math.min(12, 8 - sessions / 400 + (r() - 0.5) * 4));
+                return {
+                    channel: ["Organic","Paid","Social","Email","Referral"][Math.floor(r() * 5)],
+                    sessions,
+                    conversion: +conv.toFixed(2)
+                };
+            });
+
+            // KPIs
+            const revenue = monthly.reduce((s, d) => s + d.value, 0);
+            const prevRevenue = year > 2022
+                ? generateData(year - 1).monthly.reduce((s, d) => s + d.value, 0)
+                : revenue * 0.88;
+            const revDelta = Math.round((revenue - prevRevenue) / prevRevenue * 100);
+            const orders = Math.round(revenue / 1.4);
+            const churn = +(1.5 + r() * 2).toFixed(1);
+            const nps = Math.round(42 + r() * 30);
+
+            return { monthly, category, region, scatter, revenue, orders, revDelta, churn, nps };
+        }
+
+        // ── KPI cards ──────────────────────────────────────────────────────────
+        function renderKPIs(data) {
+            const fmt = v => "$" + (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v);
+            const cards = [
+                {
+                    label: "Total Revenue", value: fmt(data.revenue),
+                    delta: (data.revDelta >= 0 ? "+" : "") + data.revDelta + "% vs prev. year",
+                    icon: "bi-currency-dollar", color: "primary",
+                    deltaOk: data.revDelta >= 0
+                },
+                {
+                    label: "Total Orders", value: data.orders.toLocaleString(),
+                    delta: "units shipped", icon: "bi-box-seam", color: "success",
+                    deltaOk: true
+                },
+                {
+                    label: "Churn Rate", value: data.churn + "%",
+                    delta: data.churn < 2.5 ? "Below target" : "Above target",
+                    icon: "bi-person-dash", color: "warning",
+                    deltaOk: data.churn < 2.5
+                },
+                {
+                    label: "NPS Score", value: data.nps,
+                    delta: data.nps >= 60 ? "Excellent" : data.nps >= 40 ? "Good" : "Fair",
+                    icon: "bi-star", color: "danger",
+                    deltaOk: data.nps >= 40
+                }
+            ];
+            const row = document.getElementById("kpiRow");
+            row.innerHTML = cards.map(c => `
+                <div class="col-6 col-xl-3">
+                    <div class="card kpi-card ${c.color} border-0 shadow-sm h-100">
+                        <div class="card-body d-flex align-items-start gap-3">
+                            <div class="text-${c.color} fs-3 mt-1"><i class="bi ${c.icon}"></i></div>
+                            <div>
+                                <div class="text-muted small">${c.label}</div>
+                                <div class="kpi-value">${c.value}</div>
+                                <div class="kpi-delta ${c.deltaOk ? "text-success" : "text-danger"}">${c.delta}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>`).join("");
+        }
+
+        // ── Charts ─────────────────────────────────────────────────────────────
+        function renderRevenue(data) {
+            const el = document.getElementById("chartRevenue");
+            el.innerHTML = "";
+            el.append(Plot.plot({
+                height: 220,
+                marginLeft: 45,
+                x: { label: null, tickRotate: -30 },
+                y: { label: "Revenue ($k)", tickFormat: v => "$" + v / 1000 + "k", grid: true },
+                marks: [
+                    Plot.areaY(data.monthly, {
+                        x: "month", y: "value",
+                        fill: "#0d6efd", fillOpacity: 0.12,
+                        curve: "catmull-rom"
+                    }),
+                    Plot.lineY(data.monthly, {
+                        x: "month", y: "value",
+                        stroke: "#0d6efd", strokeWidth: 2.5,
+                        curve: "catmull-rom"
+                    }),
+                    Plot.dot(data.monthly, {
+                        x: "month", y: "value",
+                        fill: "#0d6efd", r: 4,
+                        tip: true
+                    })
+                ]
+            }));
+        }
+
+        function renderRegion(data) {
+            const el = document.getElementById("chartRegion");
+            el.innerHTML = "";
+            const colors = ["#0d6efd","#198754","#ffc107","#dc3545"];
+            // Horizontal bar acting as a simple visual breakdown
+            el.append(Plot.plot({
+                height: 220,
+                marginLeft: 100,
+                x: { label: "Share (%)", domain: [0, 50] },
+                y: { label: null },
+                color: { range: colors, legend: false },
+                marks: [
+                    Plot.barX(data.region, {
+                        x: "share", y: "region",
+                        fill: (d, i) => colors[i % colors.length],
+                        rx: 4, tip: true
+                    }),
+                    Plot.ruleX([0])
+                ]
+            }));
+        }
+
+        function renderCategory(data) {
+            const el = document.getElementById("chartCategory");
+            el.innerHTML = "";
+            const sorted = [...data.category].sort((a, b) => b.value - a.value);
+            el.append(Plot.plot({
+                height: 220,
+                marginLeft: 70,
+                x: { label: "Sales ($k)", tickFormat: v => "$" + v + "k" },
+                y: { label: null },
+                marks: [
+                    Plot.barX(sorted, {
+                        x: "value", y: "category",
+                        fill: "#198754", rx: 4, tip: true
+                    }),
+                    Plot.ruleX([0])
+                ]
+            }));
+        }
+
+        function renderScatter(data) {
+            const el = document.getElementById("chartScatter");
+            el.innerHTML = "";
+            const channelColors = {
+                Organic: "#0d6efd", Paid: "#dc3545",
+                Social: "#ffc107", Email: "#198754", Referral: "#6f42c1"
+            };
+            el.append(Plot.plot({
+                height: 220,
+                marginLeft: 40,
+                x: { label: "Sessions", grid: true },
+                y: { label: "Conv. Rate (%)", grid: true },
+                color: { domain: Object.keys(channelColors), range: Object.values(channelColors), legend: true },
+                marks: [
+                    Plot.dot(data.scatter, {
+                        x: "sessions", y: "conversion",
+                        fill: "channel", r: 6, fillOpacity: 0.75,
+                        tip: true
+                    }),
+                    Plot.linearRegressionY(data.scatter, {
+                        x: "sessions", y: "conversion",
+                        stroke: "#aaa", strokeDasharray: "4,3"
+                    })
+                ]
+            }));
+        }
+
+        // ── Main render ────────────────────────────────────────────────────────
+        function render(year) {
+            const data = generateData(year);
+            renderKPIs(data);
+            renderRevenue(data);
+            renderRegion(data);
+            renderCategory(data);
+            renderScatter(data);
+        }
+
+        render(2024);
+
+        document.getElementById("filterYear").addEventListener("change", e => {
+            render(parseInt(e.target.value, 10));
+        });
+    </script>
 </body>
 </html>
